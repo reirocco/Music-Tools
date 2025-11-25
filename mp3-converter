@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# ---------------------------------------------------------
+# Script: convert_to_mp3.sh
+# Descrizione:
+#   Converte vari tipi di file audio/video in MP3 usando FFmpeg,
+#   elimina automaticamente il file originale dopo una conversione
+#   riuscita e gestisce sia la modalità singolo file che batch.
+#
+#   Qualità: VBR (0 = max qualità, 9 = min qualità). Default: 2.
+# ---------------------------------------------------------
+
+# --- Configurazione ---
+MP3_QUALITY="2"        # Livello qualità VBR per libmp3lame
+TOTAL_PROCESSED=0      # Contatore file convertiti
+
+# ---------------------------------------------------------
+# Funzione: process_file
+# Converte un singolo file e rimuove l'originale se la conversione
+# va a buon fine.
+# ---------------------------------------------------------
+process_file() {
+    local input_path="$1"
+    
+    # Normalizza il percorso per ottenere un path assoluto
+    local input_file=$(realpath "$input_path")
+
+    # Controllo esistenza file
+    if [ ! -f "$input_file" ]; then
+        echo "ERRORE: File non trovato: '$input_path'"
+        return 1
+    fi
+
+    # Evita ricorsioni accidentali convertendo file già MP3
+    if [[ "$input_file" == *.mp3 ]]; then
+        echo "Saltato: '$input_file' è già un file MP3."
+        return 0
+    fi
+    
+    # Estrai directory, nome e base name
+    local file_dir=$(dirname "$input_file")
+    local filename=$(basename -- "$input_file")
+    local base_name="${filename%.*}"
+    
+    local output_file="${file_dir}/${base_name}.mp3"
+
+    echo "--- Conversione ($((TOTAL_PROCESSED + 1))) ---"
+    echo "Input:  '$input_file'"
+    echo "Output: '$output_file'"
+    
+    # Conversione con FFmpeg
+    ffmpeg -i "$input_file" \
+           -vn \                      # rimuove eventuali tracce video
+           -c:a libmp3lame \          # codec MP3
+           -q:a "$MP3_QUALITY" \      # qualità VBR
+           "$output_file"
+
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        echo "✅ SUCCESS: Conversione completata."
+        
+        # Cancella il file originale
+        echo "   Eliminazione del file originale: '$input_file'"
+        rm "$input_file"
+        
+        TOTAL_PROCESSED=$((TOTAL_PROCESSED + 1))
+    else
+        echo "ERRORE: Conversione fallita (codice $exit_code). File originale MANTENUTO."
+    fi
+}
+
+# ---------------------------------------------------------
+# Parte principale dello script
+# ---------------------------------------------------------
+
+# Verifica la presenza di FFmpeg
+if ! command -v ffmpeg &> /dev/null; then
+    echo "ERRORE: FFmpeg non è installato. Impossibile procedere."
+    exit 1
+fi
+
+# Se viene passato un file → modalità singolo file
+if [ -n "$1" ]; then
+    echo "Modalità: Conversione singolo file."
+    process_file "$1"
+else
+    # Altrimenti → modalità batch
+    echo "Modalità: Conversione batch di tutti i file nella directory corrente."
+    
+    # Estensioni più comuni audio/video
+    for file in *.{wav,flac,m4a,mp4,mov,ogg,webm,avi,wma,aac}; do
+        
+        # Il globing ritorna il pattern letterale se non trova file:
+        # quindi verifichiamo che sia davvero un file.
+        if [ -f "$file" ]; then
+            process_file "$file"
+        fi
+    done
+
+    echo "-------------------------------------"
+    echo "Tutte le conversioni batch sono terminate. $TOTAL_PROCESSED file convertiti."
+fi

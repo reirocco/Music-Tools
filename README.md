@@ -35,3 +35,7 @@ Supporta sia la conversione di **un singolo file**, sia la conversione **batch**
   *Debian/Ubuntu:*  
   ```bash
   sudo apt install ffmpeg
+
+## Nota
+Questo software è fornito "così com'è" senza alcuna garanzia, come indicato nella Licenza MIT.
+Usalo a tuo rischio.
